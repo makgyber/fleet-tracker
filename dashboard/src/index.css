@@ -1,0 +1,95 @@
+:root {
+  --bg: #0f1420;
+  --panel: #171d2b;
+  --panel-2: #1f2738;
+  --border: #2a3346;
+  --text: #e6ebf5;
+  --muted: #8b97ad;
+  --accent: #4f8cff;
+  --green: #37c871;
+  --amber: #f5b544;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  margin: 0;
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.app { display: flex; height: 100vh; }
+
+.sidebar {
+  width: 360px;
+  min-width: 360px;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar header {
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.sidebar h1 { font-size: 16px; margin: 0; }
+.sidebar .sub { color: var(--muted); font-size: 12px; margin-top: 4px; }
+
+.list { overflow-y: auto; flex: 1; }
+
+.map-wrap { flex: 1; position: relative; }
+#map { position: absolute; inset: 0; }
+
+.vehicle-card {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+.vehicle-card:hover { background: var(--panel-2); }
+.vehicle-card.active { background: var(--panel-2); border-left: 3px solid var(--accent); }
+.vehicle-card .row { display: flex; justify-content: space-between; align-items: center; }
+.vehicle-card .label { font-weight: 600; }
+.vehicle-card .reg { color: var(--muted); font-size: 12px; }
+.badge {
+  font-size: 11px; padding: 2px 8px; border-radius: 999px;
+  background: var(--panel); border: 1px solid var(--border); color: var(--muted);
+}
+.badge.on_trip { color: var(--green); border-color: var(--green); }
+.badge.live { color: var(--green); border-color: var(--green); }
+.badge.offline { color: var(--muted); }
+
+.eta-line { font-size: 12px; color: var(--muted); margin-top: 6px; }
+.eta-line b { color: var(--text); }
+
+.login {
+  max-width: 360px; margin: 12vh auto; background: var(--panel);
+  padding: 24px; border-radius: 12px; border: 1px solid var(--border);
+}
+.login h1 { margin-top: 0; font-size: 20px; }
+.login input {
+  width: 100%; padding: 10px 12px; margin: 6px 0; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--bg); color: var(--text);
+}
+button {
+  background: var(--accent); color: white; border: 0; padding: 10px 14px;
+  border-radius: 8px; cursor: pointer; font-weight: 600;
+}
+button.secondary { background: var(--panel-2); border: 1px solid var(--border); }
+button:disabled { opacity: 0.6; cursor: default; }
+
+.error { color: #ff6b6b; font-size: 13px; margin: 8px 0; }
+.banner {
+  padding: 8px 16px; font-size: 12px; background: #2a2313;
+  color: var(--amber); border-bottom: 1px solid var(--border);
+}
+.toolbar { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; gap: 8px; }
+
+.marker {
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--accent); border: 2px solid white;
+  box-shadow: 0 0 0 2px rgba(79,140,255,0.4);
+}

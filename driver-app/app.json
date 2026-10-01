@@ -1,0 +1,49 @@
+{
+  "expo": {
+    "name": "Fleet Driver",
+    "slug": "fleet-driver-app",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Fleet Driver uses your location to share your position with dispatch while on a trip.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Fleet Driver shares your location with dispatch while on a trip, including in the background.",
+        "UIBackgroundModes": [
+          "location"
+        ]
+      }
+    },
+    "android": {
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Fleet Driver shares your location with dispatch while on a trip."
+        }
+      ],
+      "expo-asset",
+      "expo-font",
+      "expo-status-bar"
+    ],
+    "extra": {
+      "apiUrl": "http://192.168.5.136:8000/api",
+      "firebase": {
+        "apiKey": "AIzaSyAeluycXDZwDlVhi3A2xEsB4krqkNJztqI",
+        "authDomain": "topbest-aee58.firebaseapp.com",
+        "databaseURL": "https://topbest-aee58-default-rtdb.asia-southeast1.firebasedatabase.app",
+        "projectId": "topbest-aee58",
+        "appId": "1:1085221155173:web:c151883d3c9f773ea2f18c"
+      }
+    }
+  }
+}

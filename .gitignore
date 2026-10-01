@@ -1,0 +1,17 @@
+# Firebase service-account credentials (private key — never commit)
+*firebase-adminsdk*.json
+*service-account*.json
+
+# Dependencies / build artifacts
+node_modules/
+dist/
+.expo/
+
+# Environment files
+.env
+.env.local
+
+# Logs
+*.log
+
+.DS_Store
