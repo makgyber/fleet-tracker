@@ -4,6 +4,7 @@ import { MAPBOX_TOKEN, FIREBASE_ENABLED } from './config'
 import { subscribeVehiclePosition, subscribeTripRoute } from './live'
 import Login from './components/Login'
 import MapView from './components/MapView'
+import TeamsPanel from './components/TeamsPanel'
 
 function formatEta(iso) {
   if (!iso) return '—'
@@ -23,6 +24,8 @@ export default function App() {
   const [selectedTrip, setSelectedTrip] = useState(null)
   const [liveRoute, setLiveRoute] = useState(null)
   const [error, setError] = useState('')
+  const [view, setView] = useState('vehicles') // 'vehicles' | 'teams'
+  const [focusTripId, setFocusTripId] = useState(null)
 
   const unsubsRef = useRef([])
 
@@ -108,6 +111,31 @@ export default function App() {
     }
   }, [selectedVehicleId, tripByVehicle])
 
+  // When a trip is selected directly (e.g. from the Teams panel), load it and
+  // subscribe to its live route, independent of vehicle selection.
+  useEffect(() => {
+    if (!focusTripId) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const detail = await api.trip(focusTripId)
+        if (!cancelled) {
+          setSelectedTrip(detail.data)
+          setSelectedVehicleId(detail.data?.vehicle_id ?? null)
+        }
+      } catch {
+        /* ignore */
+      }
+    })()
+    const unsub = subscribeTripRoute(focusTripId, (routePayload) => {
+      if (routePayload?.geometry) setLiveRoute(routePayload.geometry)
+    })
+    return () => {
+      cancelled = true
+      unsub && unsub()
+    }
+  }, [focusTripId])
+
   // Prefer the live route payload; fall back to the trip's stored geometry.
   const routeGeometry = useMemo(() => {
     if (liveRoute) return liveRoute
@@ -140,7 +168,21 @@ export default function App() {
           </div>
         )}
 
-        <div className="toolbar">
+        <div className="toolbar" style={{ justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              className={view === 'vehicles' ? '' : 'secondary'}
+              onClick={() => setView('vehicles')}
+            >
+              Vehicles
+            </button>
+            <button
+              className={view === 'teams' ? '' : 'secondary'}
+              onClick={() => setView('teams')}
+            >
+              Teams
+            </button>
+          </div>
           <button
             className="secondary"
             onClick={() => {
@@ -154,6 +196,9 @@ export default function App() {
 
         {error && <div className="error" style={{ padding: '0 16px' }}>{error}</div>}
 
+        {view === 'teams' && <TeamsPanel onSelectTrip={(id) => setFocusTripId(id)} />}
+
+        {view === 'vehicles' && (
         <div className="list">
           {vehicles.map((v) => {
             const trip = tripByVehicle[v.id]
@@ -208,6 +253,7 @@ export default function App() {
             </div>
           )}
         </div>
+        )}
       </div>
 
       <div className="map-wrap">

@@ -58,4 +58,11 @@ export const api = {
   // Positions (REST fallback for when Firebase is disabled)
   positions: (vehicleId, limit = 1) =>
     request(`/vehicles/${vehicleId}/positions?limit=${limit}`),
+
+  // tbss teams
+  teams: (date) => request(`/teams${date ? `?date=${date}` : ''}`),
+  importSchedule: (date) =>
+    request('/teams/import', { method: 'POST', body: date ? { date } : {} }),
+  assignVehicle: (teamId, vehicleId) =>
+    request(`/teams/${teamId}/assign-vehicle`, { method: 'POST', body: { vehicle_id: vehicleId } }),
 }

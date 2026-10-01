@@ -14,6 +14,7 @@ class Trip extends Model
     protected $fillable = [
         'vehicle_id',
         'driver_id',
+        'team_id',
         'reference',
         'status',
         'origin_latitude',
@@ -44,6 +45,11 @@ class Trip extends Model
     public function driver(): BelongsTo
     {
         return $this->belongsTo(Driver::class);
+    }
+
+    public function team(): BelongsTo
+    {
+        return $this->belongsTo(Team::class);
     }
 
     /**

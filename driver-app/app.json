@@ -31,6 +31,12 @@
           "locationAlwaysAndWhenInUsePermission": "Fleet Driver shares your location with dispatch while on a trip."
         }
       ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Fleet Driver uses the camera to scan your team's QR code."
+        }
+      ],
       "expo-asset",
       "expo-font",
       "expo-status-bar"

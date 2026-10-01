@@ -1,0 +1,50 @@
+<?php
+
+namespace App\Services;
+
+use Illuminate\Support\Facades\Http;
+
+/**
+ * HTTP client for the tbss daily field schedule API.
+ */
+class TbssClient
+{
+    public function isConfigured(): bool
+    {
+        return ! empty(config('services.tbss.url')) && ! empty(config('services.tbss.token'));
+    }
+
+    /**
+     * Fetch the schedule (teams + destinations) for a given date.
+     *
+     * @param  string|null  $date  Y-m-d; defaults to tbss "today" when null.
+     * @return array{date: string, schedule_id: int|null, teams: array}
+     *
+     * @throws \RuntimeException on misconfiguration or a failed request.
+     */
+    public function schedule(?string $date = null): array
+    {
+        if (! $this->isConfigured()) {
+            throw new \RuntimeException('tbss integration is not configured (set TBSS_API_URL and TBSS_API_TOKEN).');
+        }
+
+        $base = rtrim(config('services.tbss.url'), '/');
+
+        $response = Http::acceptJson()
+            ->withToken(config('services.tbss.token'))
+            ->timeout(30)
+            ->get("{$base}/fleet/schedule", array_filter(['date' => $date]));
+
+        if (! $response->successful()) {
+            throw new \RuntimeException("tbss request failed: HTTP {$response->status()} {$response->body()}");
+        }
+
+        $data = $response->json();
+
+        return [
+            'date' => $data['date'] ?? $date,
+            'schedule_id' => $data['schedule_id'] ?? null,
+            'teams' => $data['teams'] ?? [],
+        ];
+    }
+}

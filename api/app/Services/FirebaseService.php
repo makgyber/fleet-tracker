@@ -125,6 +125,27 @@ class FirebaseService
     }
 
     /**
+     * Publish a team's latest position to the Realtime Database at
+     * teams/{uuid}/position. Lets the dashboard track an imported team even
+     * before a fleet vehicle has been assigned to it.
+     */
+    public function publishTeamPosition(\App\Models\Team $team, array $position): void
+    {
+        if (! $this->isConfigured() || ! $this->database) {
+            return;
+        }
+
+        try {
+            $this->database->getReference("teams/{$team->team_uuid}/position")->set($position);
+        } catch (Throwable $e) {
+            Log::warning('Failed to publish team position to Firebase', [
+                'team_uuid' => $team->team_uuid,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
      * Persist a position fix into SQLite history. Works regardless of whether
      * Firebase is configured (the caller supplies the data).
      *

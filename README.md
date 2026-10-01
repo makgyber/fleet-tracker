@@ -154,3 +154,74 @@ Device GPS requires a real device or a simulator with a simulated location.
 | GET | `/api/vehicles/{id}/positions` | Position history |
 
 All endpoints except register/login require `Authorization: Bearer <token>`.
+
+## tbss daily field schedule integration
+
+The fleet tracker integrates with the **tbss** field-service system. Each day
+tbss has a schedule of **teams**, each with a set of **destinations** (job
+orders + tasks). The fleet tracker imports these, builds an optimized route per
+team, shows them on the dashboard, and lets drivers start tracking by scanning
+a team QR code — no login.
+
+```
+ tbss (Laravel + MySQL)                 fleet-tracker (Laravel + SQLite)
+ ┌────────────────────────┐  import     ┌──────────────────────────────┐
+ │ GET /api/fleet/schedule │ ──────────▶ │ fleet:import-schedule        │
+ │  (Sanctum service token)│   teams +   │  → upsert teams              │
+ │  teams[].uuid  ← QR      │ destinations│  → create+optimize trips     │
+ └────────────────────────┘             │  → publish routes to Firebase │
+                                        └──────────────┬───────────────┘
+ Driver app (Expo)                                     │
+ ┌────────────────────────┐  scan QR (team uuid)        │
+ │ ScanScreen (camera)     │ ──────────────────────────▶ GET /teams/{uuid}/trip
+ │ DriverScreen            │  stream GPS by uuid ──────▶ POST /teams/{uuid}/positions
+ └────────────────────────┘                            → Firebase teams/{uuid}/position
+                                                        → SQLite history (if vehicle assigned)
+```
+
+### tbss side
+
+- Each team has a globally-unique `uuid` (migration
+  `add_uuid_to_teams_table`) — this backs the QR code. Teams are per-day, so a
+  QR identifies a team on a specific schedule day.
+- `GET /api/fleet/schedule?date=YYYY-MM-DD` (defaults to today), protected by
+  Sanctum. Returns `{ date, schedule_id, teams: [{ uuid, code, color, vehicle,
+  members, destinations: [{ source_type, source_id, code, name, latitude,
+  longitude }] }] }`. Destinations come from each team's job orders + tasks,
+  skipping any without coordinates.
+- Issue a service token in tbss (e.g. `fleet-service@tbss.local`) and put it in
+  the fleet tracker's `.env`.
+
+### fleet-tracker side
+
+Add to `api/.env`:
+
+```ini
+TBSS_API_URL=https://tbss.example.com/api
+TBSS_API_TOKEN=<sanctum service token issued in tbss>
+```
+
+Import the schedule (also runs daily at 05:30 Asia/Manila via the scheduler):
+
+```bash
+php artisan fleet:import-schedule            # today
+php artisan fleet:import-schedule 2026-10-16 # a specific day
+```
+
+Import is idempotent — re-running refreshes stops/routes without duplicating.
+
+On the dashboard, use the **Teams** tab: pick a date, click **Import from
+tbss**, then click a team to see its route and ETAs on the map. Assign a fleet
+vehicle to a team to persist its GPS history.
+
+### Driver app (QR flow)
+
+The driver app has no login. The driver opens it and scans the team's QR code
+(which encodes the team UUID). The app loads that team's trip and route, and
+the **Start trip & share location** button streams GPS to the fleet API keyed
+by the UUID. Positions publish live to Firebase; once an operator assigns a
+fleet vehicle to the team, positions are also persisted to history.
+
+Security note: the team UUID is the credential for the public driver endpoints
+(`GET /teams/{uuid}/trip`, `POST /teams/{uuid}/positions`). Treat the QR code
+as sensitive. Because teams are per-day, a QR is scoped to that day's team.

@@ -42,4 +42,11 @@ return [
         'base_url' => env('MAPBOX_BASE_URL', 'https://api.mapbox.com'),
     ],
 
+    'tbss' => [
+        // Base URL of the tbss API and a Sanctum service token used to pull the
+        // daily field schedule (teams + destinations).
+        'url' => env('TBSS_API_URL'),
+        'token' => env('TBSS_API_TOKEN'),
+    ],
+
 ];

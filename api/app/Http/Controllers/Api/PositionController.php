@@ -54,6 +54,62 @@ class PositionController extends Controller
     }
 
     /**
+     * PUBLIC: ingest a GPS fix from the driver app using the scanned team UUID
+     * as the credential. Resolves the team's current trip + vehicle. Always
+     * publishes the live position to Firebase (keyed by vehicle when assigned,
+     * else by team); writes SQLite history only when a vehicle is assigned.
+     */
+    public function storeByTeam(Request $request, string $uuid)
+    {
+        $team = \App\Models\Team::where('team_uuid', $uuid)
+            ->with(['trips' => fn ($q) => $q->latest()])
+            ->first();
+
+        if (! $team) {
+            return response()->json(['message' => 'Team not found.'], 404);
+        }
+
+        $data = $request->validate([
+            'lat' => ['required', 'numeric', 'between:-90,90'],
+            'lng' => ['required', 'numeric', 'between:-180,180'],
+            'speed' => ['nullable', 'numeric', 'min:0'],
+            'heading' => ['nullable', 'numeric', 'between:0,360'],
+            'accuracy' => ['nullable', 'numeric', 'min:0'],
+            'ts' => ['nullable'],
+        ]);
+
+        $trip = $team->trips->first();
+        $vehicle = $trip?->vehicle_id ? Vehicle::find($trip->vehicle_id) : $team->vehicle;
+
+        $fix = [
+            'lat' => (float) $data['lat'],
+            'lng' => (float) $data['lng'],
+            'speed' => $data['speed'] ?? null,
+            'heading' => $data['heading'] ?? null,
+            'accuracy' => $data['accuracy'] ?? null,
+            'trip_id' => $trip?->id,
+            'ts' => now()->valueOf(),
+        ];
+
+        $recordedHistory = false;
+        if ($vehicle) {
+            $this->firebase->recordPosition($vehicle, $fix);
+            $this->firebase->publishVehiclePosition($vehicle, $fix);
+            $recordedHistory = true;
+        }
+
+        // Always publish under the team so the dashboard can track it even
+        // before a fleet vehicle is assigned.
+        $this->firebase->publishTeamPosition($team, $fix);
+
+        return response()->json([
+            'ok' => true,
+            'history_recorded' => $recordedHistory,
+            'firebase' => $this->firebase->isConfigured() ? 'published' : 'disabled',
+        ], 201);
+    }
+
+    /**
      * Return recent position history for a vehicle (for replay / debugging).
      */
     public function index(Request $request, Vehicle $vehicle)

@@ -1,31 +1,28 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { API_URL } from './config'
 
-const TOKEN_KEY = 'fleet_driver_token'
+// The scanned team UUID is persisted so the app reopens to the same team.
+const TEAM_KEY = 'fleet_team_uuid'
 
-let cachedToken = null
+let cachedUuid = null
 
-export async function getToken() {
-  if (cachedToken) return cachedToken
-  cachedToken = await AsyncStorage.getItem(TOKEN_KEY)
-  return cachedToken
+export async function getTeamUuid() {
+  if (cachedUuid) return cachedUuid
+  cachedUuid = await AsyncStorage.getItem(TEAM_KEY)
+  return cachedUuid
 }
-export async function setToken(token) {
-  cachedToken = token
-  await AsyncStorage.setItem(TOKEN_KEY, token)
+export async function setTeamUuid(uuid) {
+  cachedUuid = uuid
+  await AsyncStorage.setItem(TEAM_KEY, uuid)
 }
-export async function clearToken() {
-  cachedToken = null
-  await AsyncStorage.removeItem(TOKEN_KEY)
+export async function clearTeamUuid() {
+  cachedUuid = null
+  await AsyncStorage.removeItem(TEAM_KEY)
 }
 
-async function request(path, { method = 'GET', body, auth = true } = {}) {
+async function request(path, { method = 'GET', body } = {}) {
   const headers = { Accept: 'application/json' }
   if (body) headers['Content-Type'] = 'application/json'
-  if (auth) {
-    const token = await getToken()
-    if (token) headers.Authorization = `Bearer ${token}`
-  }
 
   const res = await fetch(`${API_URL}${path}`, {
     method,
@@ -40,16 +37,8 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
 }
 
 export const api = {
-  login: (email, password) =>
-    request('/auth/login', {
-      method: 'POST',
-      body: { email, password, device_name: 'driver-app' },
-      auth: false,
-    }),
-  me: () => request('/auth/me'),
-  trips: () => request('/trips'),
-  trip: (id) => request(`/trips/${id}`),
-  // Server-side ingest (used alongside/instead of direct Firebase writes).
-  postPosition: (vehicleId, fix) =>
-    request(`/vehicles/${vehicleId}/positions`, { method: 'POST', body: fix }),
+  // Public QR-driven endpoints (team UUID is the credential).
+  teamTrip: (uuid) => request(`/teams/${encodeURIComponent(uuid)}/trip`),
+  postTeamPosition: (uuid, fix) =>
+    request(`/teams/${encodeURIComponent(uuid)}/positions`, { method: 'POST', body: fix }),
 }

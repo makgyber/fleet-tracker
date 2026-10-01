@@ -1,25 +1,33 @@
 import { useEffect, useState } from 'react'
 import { View, ActivityIndicator, StyleSheet } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
-import { getToken, clearToken } from './src/api'
-import LoginScreen from './src/LoginScreen'
+import { api, getTeamUuid, clearTeamUuid } from './src/api'
+import ScanScreen from './src/ScanScreen'
 import DriverScreen from './src/DriverScreen'
 
 export default function App() {
-  const [authed, setAuthed] = useState(false)
+  const [teamData, setTeamData] = useState(null)
   const [checking, setChecking] = useState(true)
 
+  // On launch, re-resolve a previously scanned team (if any).
   useEffect(() => {
     ;(async () => {
-      const token = await getToken()
-      setAuthed(Boolean(token))
+      const uuid = await getTeamUuid()
+      if (uuid) {
+        try {
+          const data = await api.teamTrip(uuid)
+          setTeamData(data)
+        } catch {
+          await clearTeamUuid()
+        }
+      }
       setChecking(false)
     })()
   }, [])
 
-  const signOut = async () => {
-    await clearToken()
-    setAuthed(false)
+  const exit = async () => {
+    await clearTeamUuid()
+    setTeamData(null)
   }
 
   if (checking) {
@@ -34,10 +42,10 @@ export default function App() {
   return (
     <>
       <StatusBar style="light" />
-      {authed ? (
-        <DriverScreen onSignOut={signOut} />
+      {teamData ? (
+        <DriverScreen teamData={teamData} onExit={exit} />
       ) : (
-        <LoginScreen onAuthed={() => setAuthed(true)} />
+        <ScanScreen onTeam={setTeamData} />
       )}
     </>
   )

@@ -1,18 +1,17 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useRef, useState, useCallback, useEffect } from 'react'
 import * as Location from 'expo-location'
-import { writeVehiclePosition } from './live'
+import { writeTeamPosition } from './live'
 import { api } from './api'
 import { FIREBASE_ENABLED } from './config'
 
 /**
- * Streams device GPS while active. Each fix is pushed to Firebase (low latency)
- * and to the REST API (authoritative history). Returns the latest position and
- * controls to start/stop tracking.
+ * Streams device GPS while active, keyed by the scanned team UUID. Each fix is
+ * pushed to Firebase (low latency) and to the REST API (authoritative history).
  *
- * @param {number|null} vehicleId
+ * @param {string|null} teamUuid
  * @param {number|null} tripId
  */
-export function useTracking(vehicleId, tripId) {
+export function useTracking(teamUuid, tripId) {
   const [tracking, setTracking] = useState(false)
   const [position, setPosition] = useState(null)
   const [error, setError] = useState('')
@@ -31,12 +30,14 @@ export function useTracking(vehicleId, tripId) {
       setPosition(fix)
 
       // Fire both transports; don't let one failure block the other.
-      if (FIREBASE_ENABLED) {
-        writeVehiclePosition(vehicleId, fix).catch(() => {})
+      if (FIREBASE_ENABLED && teamUuid) {
+        writeTeamPosition(teamUuid, fix).catch(() => {})
       }
-      api.postPosition(vehicleId, fix).catch(() => {})
+      if (teamUuid) {
+        api.postTeamPosition(teamUuid, fix).catch(() => {})
+      }
     },
-    [vehicleId, tripId],
+    [teamUuid, tripId],
   )
 
   const start = useCallback(async () => {
@@ -50,8 +51,8 @@ export function useTracking(vehicleId, tripId) {
     subRef.current = await Location.watchPositionAsync(
       {
         accuracy: Location.Accuracy.High,
-        timeInterval: 3000, // ~every 3s (throttles Firebase egress)
-        distanceInterval: 10, // or every 10 meters
+        timeInterval: 3000,
+        distanceInterval: 10,
       },
       handleFix,
     )

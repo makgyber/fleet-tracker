@@ -10,8 +10,10 @@ return new class extends Migration
     {
         Schema::create('trips', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('vehicle_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('driver_id')->constrained()->cascadeOnDelete();
+            // Nullable: an imported team trip may not have a vehicle/driver
+            // assigned yet (assigned later in the dashboard).
+            $table->foreignId('vehicle_id')->nullable()->constrained()->nullOnDelete();
+            $table->foreignId('driver_id')->nullable()->constrained()->nullOnDelete();
             $table->string('reference')->nullable(); // human-friendly job id
             $table->enum('status', ['planned', 'optimized', 'in_progress', 'completed', 'cancelled'])
                 ->default('planned');

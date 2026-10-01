@@ -14,12 +14,10 @@ class StoreTripRequest extends FormRequest
 
     public function rules(): array
     {
-        $creating = $this->isMethod('post');
-        $req = $creating ? 'required' : 'sometimes';
-
         return [
-            'vehicle_id' => [$req, 'integer', 'exists:vehicles,id'],
-            'driver_id' => [$req, 'integer', 'exists:drivers,id'],
+            'vehicle_id' => ['nullable', 'integer', 'exists:vehicles,id'],
+            'driver_id' => ['nullable', 'integer', 'exists:drivers,id'],
+            'team_id' => ['nullable', 'integer', 'exists:teams,id'],
             'reference' => ['nullable', 'string', 'max:100'],
             'status' => ['sometimes', Rule::in(['planned', 'optimized', 'in_progress', 'completed', 'cancelled'])],
             'origin_latitude' => ['nullable', 'numeric', 'between:-90,90'],

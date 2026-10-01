@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native'
+import { useMemo, useState } from 'react'
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native'
 import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps'
-import { api, clearToken } from './api'
 import { useTracking } from './useTracking'
 import { FIREBASE_ENABLED } from './config'
 
@@ -13,47 +12,20 @@ function etaLabel(iso) {
   return mins < 0 ? `${time} (due)` : `${time} · ${mins} min`
 }
 
-export default function DriverScreen({ onSignOut }) {
-  const [loading, setLoading] = useState(true)
-  const [me, setMe] = useState(null)
-  const [trip, setTrip] = useState(null)
-  const [error, setError] = useState('')
+/**
+ * Shows the team's trip (resolved from the scanned QR), its route and ETAs,
+ * and a start/stop control that streams GPS keyed by the team UUID.
+ *
+ * @param {Object} props
+ * @param {{team: object, vehicle_id: number|null, trip: object|null}} props.teamData
+ * @param {() => void} props.onExit  return to the scanner
+ */
+export default function DriverScreen({ teamData, onExit }) {
+  const team = teamData.team
+  const trip = teamData.trip
+  const teamUuid = team?.uuid
 
-  // The vehicle assigned to this trip drives GPS reporting.
-  const vehicleId = trip?.vehicle_id ?? null
-  const tripId = trip?.id ?? null
-  const { tracking, position, error: trackError, start, stop } = useTracking(vehicleId, tripId)
-
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const meRes = await api.me()
-        if (cancelled) return
-        setMe(meRes)
-
-        // Find this driver's active/optimized trip.
-        const tripsRes = await api.trips()
-        const driverId = meRes.driver?.id
-        const mine = (tripsRes.data || []).find(
-          (t) =>
-            t.driver_id === driverId &&
-            ['optimized', 'in_progress', 'planned'].includes(t.status),
-        )
-        if (mine) {
-          const detail = await api.trip(mine.id)
-          if (!cancelled) setTrip(detail.data)
-        }
-      } catch (e) {
-        if (!cancelled) setError(e.message)
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [])
+  const { tracking, position, error: trackError, start, stop } = useTracking(teamUuid, trip?.id)
 
   const routeCoords = useMemo(() => {
     const geo = trip?.route?.geometry
@@ -72,17 +44,13 @@ export default function DriverScreen({ onSignOut }) {
   )
 
   const initialRegion = useMemo(() => {
-    const first = routeCoords[0] || { latitude: 14.6507, longitude: 121.1029 } // Marikina, PH
+    const first =
+      routeCoords[0] ||
+      (trip?.stops?.[0]
+        ? { latitude: Number(trip.stops[0].destination.latitude), longitude: Number(trip.stops[0].destination.longitude) }
+        : { latitude: 14.6507, longitude: 121.1029 }) // Marikina, PH
     return { ...first, latitudeDelta: 0.08, longitudeDelta: 0.08 }
-  }, [routeCoords])
-
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color="#4f8cff" />
-      </View>
-    )
-  }
+  }, [routeCoords, trip])
 
   return (
     <View style={styles.container}>
@@ -115,27 +83,25 @@ export default function DriverScreen({ onSignOut }) {
       <ScrollView style={styles.panel} contentContainerStyle={{ paddingBottom: 24 }}>
         <View style={styles.headerRow}>
           <View>
-            <Text style={styles.hello}>Hi, {me?.name || 'Driver'}</Text>
+            <Text style={styles.hello}>{team?.code || 'Team'}</Text>
             <Text style={styles.sub}>
-              {FIREBASE_ENABLED ? 'Live tracking via Firebase' : 'Reporting via API'}
+              {(team?.members || []).length} member(s) ·{' '}
+              {FIREBASE_ENABLED ? 'live via Firebase' : 'reporting via API'}
             </Text>
           </View>
-          <TouchableOpacity onPress={onSignOut}>
-            <Text style={styles.signout}>Sign out</Text>
+          <TouchableOpacity onPress={onExit}>
+            <Text style={styles.signout}>Rescan</Text>
           </TouchableOpacity>
         </View>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-
         {!trip ? (
-          <Text style={styles.sub}>No trip assigned yet. Check back with dispatch.</Text>
+          <Text style={[styles.sub, { marginTop: 16 }]}>
+            This team has no route yet. Check with dispatch.
+          </Text>
         ) : (
           <>
-            <Text style={styles.tripTitle}>
-              Trip #{trip.id} · {trip.status}
-            </Text>
             {trip.route?.total_distance_m ? (
-              <Text style={styles.sub}>
+              <Text style={[styles.sub, { marginTop: 12 }]}>
                 {(trip.route.total_distance_m / 1000).toFixed(1)} km ·{' '}
                 {Math.round((trip.route.total_duration_s || 0) / 60)} min total
               </Text>
@@ -149,7 +115,7 @@ export default function DriverScreen({ onSignOut }) {
               </View>
             )}
 
-            <Text style={styles.sectionTitle}>All stops</Text>
+            <Text style={styles.sectionTitle}>ALL STOPS</Text>
             {(trip.stops || []).map((s) => (
               <View key={s.id} style={styles.stopRow}>
                 <Text style={styles.stopSeq}>{s.sequence ?? '–'}</Text>
@@ -178,7 +144,6 @@ export default function DriverScreen({ onSignOut }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0f1420' },
-  center: { flex: 1, backgroundColor: '#0f1420', justifyContent: 'center', alignItems: 'center' },
   map: { height: '45%' },
   panel: { flex: 1, padding: 16 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
@@ -186,7 +151,6 @@ const styles = StyleSheet.create({
   sub: { color: '#8b97ad', marginTop: 2 },
   signout: { color: '#4f8cff', fontWeight: '600' },
   error: { color: '#ff6b6b', marginTop: 8 },
-  tripTitle: { color: '#e6ebf5', fontSize: 16, fontWeight: '700', marginTop: 16 },
   nextBox: {
     backgroundColor: '#171d2b',
     borderColor: '#2a3346',
@@ -207,12 +171,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#2a3346',
     borderBottomWidth: 1,
   },
-  stopSeq: {
-    color: '#4f8cff',
-    fontWeight: '700',
-    width: 24,
-    textAlign: 'center',
-  },
+  stopSeq: { color: '#4f8cff', fontWeight: '700', width: 24, textAlign: 'center' },
   stopName: { color: '#e6ebf5' },
   stopEta: { color: '#8b97ad', fontSize: 12 },
   button: {
