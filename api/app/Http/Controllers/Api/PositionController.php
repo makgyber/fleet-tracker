@@ -4,14 +4,38 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\PositionHistory;
+use App\Models\Trip;
 use App\Models\Vehicle;
+use App\Services\ArrivalDetector;
 use App\Services\FirebaseService;
 use Illuminate\Http\Request;
 
 class PositionController extends Controller
 {
-    public function __construct(private readonly FirebaseService $firebase)
+    public function __construct(
+        private readonly FirebaseService $firebase,
+        private readonly ArrivalDetector $arrivals,
+    ) {
+    }
+
+    /**
+     * Run geofence arrival detection for a trip against a position. Any stops
+     * that flip to "arrived" trigger a refresh of the trip's route node in
+     * Firebase so the dashboard + app update live. Returns the changed stops.
+     */
+    private function detectArrivals(?Trip $trip, array $position): array
     {
+        if (! $trip) {
+            return [];
+        }
+
+        $changed = $this->arrivals->detect($trip, $position);
+
+        if (! empty($changed)) {
+            $this->firebase->publishTripRoute($trip->fresh(['stops.destination']));
+        }
+
+        return $changed;
     }
 
     /**
@@ -46,10 +70,19 @@ class PositionController extends Controller
             'ts' => $position->recorded_at->valueOf(),
         ]);
 
+        // Resolve the trip to check for arrivals: the explicit trip_id if given,
+        // otherwise the vehicle's current active trip.
+        $trip = isset($data['trip_id'])
+            ? Trip::find($data['trip_id'])
+            : $vehicle->trips()->whereIn('status', ['optimized', 'in_progress'])->latest()->first();
+
+        $arrived = $this->detectArrivals($trip, ['lat' => (float) $data['lat'], 'lng' => (float) $data['lng']]);
+
         return response()->json([
             'ok' => true,
             'recorded_at' => $position->recorded_at->toIso8601String(),
             'firebase' => $this->firebase->isConfigured() ? 'published' : 'disabled',
+            'arrived_stops' => array_map(fn ($s) => $s->id, $arrived),
         ], 201);
     }
 
@@ -102,10 +135,14 @@ class PositionController extends Controller
         // before a fleet vehicle is assigned.
         $this->firebase->publishTeamPosition($team, $fix);
 
+        // Auto-detect arrivals against the team's trip stops.
+        $arrived = $this->detectArrivals($trip, ['lat' => (float) $data['lat'], 'lng' => (float) $data['lng']]);
+
         return response()->json([
             'ok' => true,
             'history_recorded' => $recordedHistory,
             'firebase' => $this->firebase->isConfigured() ? 'published' : 'disabled',
+            'arrived_stops' => array_map(fn ($s) => $s->id, $arrived),
         ], 201);
     }
 

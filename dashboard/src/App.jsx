@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, getToken, clearToken } from './api'
 import { MAPBOX_TOKEN, FIREBASE_ENABLED } from './config'
-import { subscribeVehiclePosition, subscribeTripRoute } from './live'
+import { subscribeVehiclePosition, subscribeTeamPosition, subscribeTripRoute } from './live'
 import Login from './components/Login'
 import MapView from './components/MapView'
 import TeamsPanel from './components/TeamsPanel'
@@ -18,14 +18,18 @@ function formatEta(iso) {
 export default function App() {
   const [authed, setAuthed] = useState(Boolean(getToken()))
   const [vehicles, setVehicles] = useState([])
+  const [teams, setTeams] = useState([])
   const [trips, setTrips] = useState([])
   const [positions, setPositions] = useState({})
+  const [teamPositions, setTeamPositions] = useState({})
   const [selectedVehicleId, setSelectedVehicleId] = useState(null)
   const [selectedTrip, setSelectedTrip] = useState(null)
   const [liveRoute, setLiveRoute] = useState(null)
   const [error, setError] = useState('')
   const [view, setView] = useState('vehicles') // 'vehicles' | 'teams'
   const [focusTripId, setFocusTripId] = useState(null)
+  const [overview, setOverview] = useState(false) // show all teams/routes at once
+  const [overviewData, setOverviewData] = useState([])
 
   const unsubsRef = useRef([])
 
@@ -35,10 +39,11 @@ export default function App() {
     let cancelled = false
     ;(async () => {
       try {
-        const [v, t] = await Promise.all([api.vehicles(), api.trips()])
+        const [v, t, tm] = await Promise.all([api.vehicles(), api.trips(), api.teams()])
         if (cancelled) return
         setVehicles(v.data || [])
         setTrips(t.data || [])
+        setTeams(tm.data || [])
       } catch (err) {
         if (err.message?.includes('401')) {
           clearToken()
@@ -67,6 +72,23 @@ export default function App() {
       unsubsRef.current = []
     }
   }, [authed, vehicles])
+
+  // Subscribe to each team's live position (teams/{uuid}/position). Teams are
+  // the primary tracked unit — the driver app keys positions by scanned UUID,
+  // so this works whether or not a fleet vehicle has been assigned.
+  useEffect(() => {
+    if (!authed || teams.length === 0) return
+    const unsubs = teams
+      .filter((t) => t.team_uuid)
+      .map((t) =>
+        subscribeTeamPosition(t.team_uuid, (pos) => {
+          setTeamPositions((prev) => ({ ...prev, [t.id]: pos }))
+        }),
+      )
+    return () => {
+      unsubs.forEach((u) => u && u())
+    }
+  }, [authed, teams])
 
   // Map vehicle -> its most relevant trip (optimized/in_progress).
   const tripByVehicle = useMemo(() => {
@@ -136,6 +158,30 @@ export default function App() {
     }
   }, [focusTripId])
 
+  // Fleet overview: fetch all teams' routes + stops in one call when enabled.
+  useEffect(() => {
+    if (!overview) {
+      setOverviewData([])
+      return
+    }
+    // Clear any single-trip selection so the overview owns the map.
+    setSelectedVehicleId(null)
+    setFocusTripId(null)
+    setSelectedTrip(null)
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await api.teamsOverview()
+        if (!cancelled) setOverviewData(res.data || [])
+      } catch (e) {
+        if (!cancelled) setError(e.message)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [overview])
+
   // Prefer the live route payload; fall back to the trip's stored geometry.
   const routeGeometry = useMemo(() => {
     if (liveRoute) return liveRoute
@@ -148,6 +194,16 @@ export default function App() {
     }
     return null
   }, [liveRoute, selectedTrip])
+
+  // Merge vehicle + team positions into a single marker map for the map.
+  // Team keys are namespaced to avoid colliding with numeric vehicle ids.
+  const mapPositions = useMemo(() => {
+    const merged = { ...positions }
+    for (const [teamId, pos] of Object.entries(teamPositions)) {
+      if (pos) merged[`team:${teamId}`] = pos
+    }
+    return merged
+  }, [positions, teamPositions])
 
   if (!authed) return <Login onAuthed={() => setAuthed(true)} />
 
@@ -181,6 +237,13 @@ export default function App() {
               onClick={() => setView('teams')}
             >
               Teams
+            </button>
+            <button
+              className={overview ? '' : 'secondary'}
+              onClick={() => setOverview((v) => !v)}
+              title="Show all teams and destinations on the map"
+            >
+              {overview ? 'Overview: on' : 'Overview'}
             </button>
           </div>
           <button
@@ -258,9 +321,11 @@ export default function App() {
 
       <div className="map-wrap">
         <MapView
-          positions={positions}
+          positions={mapPositions}
           routeGeometry={routeGeometry}
           focusVehicleId={selectedVehicleId}
+          stops={selectedTrip?.stops || []}
+          teamRoutes={overview ? overviewData : null}
         />
       </div>
     </div>

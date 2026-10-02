@@ -30,10 +30,18 @@ class TbssClient
 
         $base = rtrim(config('services.tbss.url'), '/');
 
-        $response = Http::acceptJson()
+        $request = Http::acceptJson()
             ->withToken(config('services.tbss.token'))
-            ->timeout(30)
-            ->get("{$base}/fleet/schedule", array_filter(['date' => $date]));
+            ->timeout(30);
+
+        // Local TBSS hosts (e.g. https://tbss.test) use self-signed certs that
+        // the system trust store can't verify. Allow opting out of TLS
+        // verification via config for development only; defaults to on.
+        if (! config('services.tbss.verify_ssl', true)) {
+            $request = $request->withoutVerifying();
+        }
+
+        $response = $request->get("{$base}/fleet/schedule", array_filter(['date' => $date]));
 
         if (! $response->successful()) {
             throw new \RuntimeException("tbss request failed: HTTP {$response->status()} {$response->body()}");

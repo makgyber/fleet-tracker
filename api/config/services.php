@@ -47,6 +47,14 @@ return [
         // daily field schedule (teams + destinations).
         'url' => env('TBSS_API_URL'),
         'token' => env('TBSS_API_TOKEN'),
+        // Verify the TLS certificate. Set TBSS_VERIFY_SSL=false for local hosts
+        // (e.g. https://tbss.test) that use self-signed certificates.
+        'verify_ssl' => env('TBSS_VERIFY_SSL', true),
+    ],
+
+    'fleet' => [
+        // Radius (meters) within which a GPS fix auto-marks a stop as arrived.
+        'arrival_radius_m' => (float) env('FLEET_ARRIVAL_RADIUS_M', 75),
     ],
 
 ];

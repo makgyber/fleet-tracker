@@ -8,6 +8,8 @@ use App\Models\Trip;
 use App\Models\TripStop;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Imports the tbss daily field schedule into the fleet-tracker: upserts teams,
@@ -16,6 +18,29 @@ use Illuminate\Support\Facades\DB;
  */
 class ScheduleImporter
 {
+    /**
+     * Team codes that represent non-field states (unavailable crews, office/
+     * warehouse duty) rather than real routes. These are skipped entirely on
+     * import: no team record, no trip. Matched case-insensitively after
+     * trimming/collapsing whitespace.
+     */
+    private const EXCLUDED_TEAM_CODES = [
+        'BODEGERO/OFFICE',
+        'ABSENT',
+        'LEAVE',
+        'DAY OFF/WALANG PASOK',
+    ];
+
+    /**
+     * tbss emits this sentinel coordinate for addresses it could not geocode,
+     * so many unrelated stops collapse onto the same point. When we see it (or a
+     * missing/zero coordinate) we re-geocode the address via Mapbox instead of
+     * trusting the feed. Compared with a small epsilon to absorb rounding.
+     */
+    private const TBSS_FALLBACK_LAT = 14.444546;
+    private const TBSS_FALLBACK_LNG = 120.9938736;
+    private const COORD_EPSILON = 0.0005; // ~55m
+
     public function __construct(
         private readonly TbssClient $tbss,
         private readonly RouteOptimizer $optimizer,
@@ -24,9 +49,19 @@ class ScheduleImporter
     }
 
     /**
+     * Whether a team should be excluded from import based on its tbss code.
+     */
+    private function isExcludedTeam(array $teamData): bool
+    {
+        $code = strtoupper(trim(preg_replace('/\s+/', ' ', (string) ($teamData['code'] ?? ''))));
+
+        return in_array($code, self::EXCLUDED_TEAM_CODES, true);
+    }
+
+    /**
      * Import a given date (defaults to tbss "today").
      *
-     * @return array{date: string, teams_imported: int, trips_optimized: int, skipped_no_destinations: int}
+     * @return array{date: string, teams_imported: int, trips_optimized: int, skipped_no_destinations: int, skipped_excluded: int}
      */
     public function import(?string $date = null): array
     {
@@ -37,8 +72,15 @@ class ScheduleImporter
         $teamsImported = 0;
         $tripsOptimized = 0;
         $skipped = 0;
+        $skippedExcluded = 0;
 
         foreach ($payload['teams'] as $teamData) {
+            // Skip non-field teams (absent/leave/day off/office) outright.
+            if ($this->isExcludedTeam($teamData)) {
+                $skippedExcluded++;
+                continue;
+            }
+
             $destinations = $teamData['destinations'] ?? [];
 
             // A team with no mappable destinations gets a team record but no trip.
@@ -65,6 +107,7 @@ class ScheduleImporter
             'teams_imported' => $teamsImported,
             'trips_optimized' => $tripsOptimized,
             'skipped_no_destinations' => $skipped,
+            'skipped_excluded' => $skippedExcluded,
         ];
     }
 
@@ -129,22 +172,138 @@ class ScheduleImporter
     }
 
     /**
-     * Find or create a destination for a tbss stop. De-duplicates on
-     * coordinates so repeated imports reuse the same destination row.
+     * Find or create a destination for a tbss stop.
+     *
+     * De-duplicates on the stop's tbss source identity (source_type +
+     * source_id), NOT on coordinates. Keying on coordinates silently merged
+     * distinct addresses that shared a point (e.g. the tbss geocode-failure
+     * fallback), which dropped stops on import. Keying on source identity keeps
+     * every distinct stop and lets re-imports refresh name/address/coordinates.
+     *
+     * Stops without a source identity fall back to coordinate de-duplication.
      */
     private function upsertDestination(array $d): Destination
     {
-        $lat = round((float) $d['latitude'], 7);
-        $lng = round((float) $d['longitude'], 7);
+        [$lat, $lng] = $this->resolveCoordinates($d);
 
+        $sourceType = $d['source_type'] ?? null;
+        $sourceId = $d['source_id'] ?? null;
+
+        $attributes = [
+            'name' => $d['name'] ?? ($d['code'] ?? 'Stop'),
+            'address' => $d['name'] ?? null,
+            'latitude' => $lat,
+            'longitude' => $lng,
+            'notes' => $sourceType !== null ? "tbss {$sourceType} #{$sourceId}" : null,
+        ];
+
+        // Preferred path: identify the destination by its tbss source. Refresh
+        // mutable fields each import so corrected names/coordinates propagate.
+        if ($sourceType !== null && $sourceId !== null) {
+            return Destination::updateOrCreate(
+                ['source_type' => $sourceType, 'source_id' => (int) $sourceId],
+                $attributes,
+            );
+        }
+
+        // Fallback for ad-hoc stops with no source identity: dedup by coordinate.
         return Destination::firstOrCreate(
             ['latitude' => $lat, 'longitude' => $lng],
-            [
-                'name' => $d['name'] ?? ($d['code'] ?? 'Stop'),
-                'address' => $d['name'] ?? null,
-                'notes' => isset($d['source_type']) ? "tbss {$d['source_type']} #{$d['source_id']}" : null,
-            ],
+            $attributes,
         );
+    }
+
+    /**
+     * Resolve a usable [lat, lng] for a tbss stop. Trusts the feed's coordinate
+     * unless it is missing, zero, or the known tbss fallback sentinel, in which
+     * case we geocode the address via Mapbox. Falls back to the original value
+     * if geocoding is unavailable or fails, so import never breaks.
+     *
+     * @return array{0: float, 1: float}
+     */
+    private function resolveCoordinates(array $d): array
+    {
+        $lat = round((float) ($d['latitude'] ?? 0), 7);
+        $lng = round((float) ($d['longitude'] ?? 0), 7);
+
+        if (! $this->needsGeocoding($lat, $lng)) {
+            return [$lat, $lng];
+        }
+
+        $address = $d['name'] ?? $d['code'] ?? null;
+        if ($address) {
+            $geocoded = $this->geocode($address);
+            if ($geocoded !== null) {
+                Log::info('Re-geocoded tbss stop with fallback/missing coordinate', [
+                    'address' => $address,
+                    'from' => [$lat, $lng],
+                    'to' => $geocoded,
+                ]);
+
+                return [round($geocoded[0], 7), round($geocoded[1], 7)];
+            }
+
+            Log::warning('tbss stop has bad coordinate and geocoding failed; keeping original', [
+                'address' => $address,
+                'coord' => [$lat, $lng],
+            ]);
+        }
+
+        return [$lat, $lng];
+    }
+
+    /** Whether a coordinate is missing, zero, or the tbss fallback sentinel. */
+    private function needsGeocoding(float $lat, float $lng): bool
+    {
+        if (abs($lat) < 1e-6 && abs($lng) < 1e-6) {
+            return true;
+        }
+
+        return abs($lat - self::TBSS_FALLBACK_LAT) < self::COORD_EPSILON
+            && abs($lng - self::TBSS_FALLBACK_LNG) < self::COORD_EPSILON;
+    }
+
+    /**
+     * Forward-geocode an address with Mapbox, biased to the Philippines.
+     * Returns [lat, lng] of the best match, or null when unavailable/no match.
+     *
+     * @return array{0: float, 1: float}|null
+     */
+    private function geocode(string $address): ?array
+    {
+        $token = config('services.mapbox.token');
+        if (empty($token)) {
+            return null;
+        }
+
+        $base = rtrim(config('services.mapbox.base_url', 'https://api.mapbox.com'), '/');
+        $url = "{$base}/geocoding/v5/mapbox.places/" . rawurlencode($address) . '.json';
+
+        try {
+            $response = Http::acceptJson()
+                ->timeout(15)
+                ->get($url, [
+                    'access_token' => $token,
+                    'country' => 'ph',
+                    'limit' => 1,
+                ]);
+
+            if (! $response->successful()) {
+                return null;
+            }
+
+            $center = $response->json('features.0.center');
+            if (! is_array($center) || count($center) < 2) {
+                return null;
+            }
+
+            // Mapbox returns [lng, lat]; normalize to [lat, lng].
+            return [(float) $center[1], (float) $center[0]];
+        } catch (\Throwable $e) {
+            Log::warning('Mapbox geocoding failed', ['address' => $address, 'error' => $e->getMessage()]);
+
+            return null;
+        }
     }
 
     /**

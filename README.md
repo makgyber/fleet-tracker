@@ -225,3 +225,52 @@ fleet vehicle to the team, positions are also persisted to history.
 Security note: the team UUID is the credential for the public driver endpoints
 (`GET /teams/{uuid}/trip`, `POST /teams/{uuid}/positions`). Treat the QR code
 as sensitive. Because teams are per-day, a QR is scoped to that day's team.
+
+## Driver app maps (Google / Apple)
+
+The driver app renders its map with `react-native-maps` using the **native base
+map**, which is free for map display:
+
+- **Android** → Google Maps. Requires a Google Maps API key.
+- **iOS** → Apple Maps by default (no key, works out of the box).
+
+Map **display** in the mobile native SDKs is not a billed event, so the driver
+map is effectively free regardless of volume. (Routing/ETAs are handled
+separately by Mapbox on the backend, not Google.)
+
+### Where the API keys go
+
+In `driver-app/app.json`:
+
+```json
+"android": {
+  "config": { "googleMaps": { "apiKey": "<ANDROID_KEY>" } }
+},
+"ios": {
+  "config": { "googleMapsApiKey": "<IOS_KEY>" }   // only if using Google Maps on iOS
+}
+```
+
+Get keys from Google Cloud Console → enable **Maps SDK for Android** (and
+**Maps SDK for iOS** if used) → create an API key. **Restrict each key** to the
+specific SDK and to your app's package name + signing fingerprint, since the key
+ships inside the app binary.
+
+iOS uses Apple Maps unless you both set the iOS key above **and** change the
+`MapView` provider to `PROVIDER_GOOGLE` in `src/DriverScreen.js`. Apple Maps is
+fine for most cases and needs neither.
+
+### Important: Expo Go vs. a native build
+
+The keys in `app.json` only take effect in a **native build**, not in Expo Go
+(Expo Go uses its own bundled map key on Android). To run the app with your own
+key:
+
+```bash
+cd driver-app
+npx expo run:android     # local dev build (needs Android Studio), or
+eas build --profile development --platform android   # cloud build
+```
+
+- iOS: the map works immediately in Expo Go via Apple Maps.
+- Android: use a development build to pick up your Google Maps key.

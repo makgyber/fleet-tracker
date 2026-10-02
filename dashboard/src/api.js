@@ -61,6 +61,7 @@ export const api = {
 
   // tbss teams
   teams: (date) => request(`/teams${date ? `?date=${date}` : ''}`),
+  teamsOverview: (date) => request(`/teams/overview${date ? `?date=${date}` : ''}`),
   importSchedule: (date) =>
     request('/teams/import', { method: 'POST', body: date ? { date } : {} }),
   assignVehicle: (teamId, vehicleId) =>

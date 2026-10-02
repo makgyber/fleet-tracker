@@ -49,6 +49,51 @@ class TeamController extends Controller
     }
 
     /**
+     * Fleet overview: every team for a date with its full route geometry and
+     * stops, in a single payload — so the dashboard can draw all teams and
+     * destinations on the map at once without N per-team requests.
+     */
+    public function overview(Request $request)
+    {
+        $query = Team::query()
+            ->with(['trips' => fn ($q) => $q->latest()->with('stops.destination')]);
+
+        if ($date = $request->query('date')) {
+            $query->whereDate('schedule_date', $date);
+        }
+
+        $teams = $query->get()
+            ->filter(fn (Team $team) => $team->trips->first())
+            ->map(function (Team $team) {
+                $trip = $team->trips->first();
+
+                return [
+                    'id' => $team->id,
+                    'team_uuid' => $team->team_uuid,
+                    'code' => $team->code,
+                    'color' => $team->color,
+                    'trip_id' => $trip->id,
+                    'status' => $trip->status,
+                    'geometry' => $trip->route_geometry ? json_decode($trip->route_geometry, true) : null,
+                    'stops' => $trip->stops->map(fn ($s) => [
+                        'id' => $s->id,
+                        'sequence' => $s->sequence,
+                        'eta' => $s->eta,
+                        'status' => $s->status,
+                        'destination' => $s->destination ? [
+                            'name' => $s->destination->name,
+                            'latitude' => (float) $s->destination->latitude,
+                            'longitude' => (float) $s->destination->longitude,
+                        ] : null,
+                    ])->values(),
+                ];
+            })
+            ->values();
+
+        return response()->json(['data' => $teams]);
+    }
+
+    /**
      * Trigger an import of the tbss schedule for a date (defaults to today).
      */
     public function import(Request $request, ScheduleImporter $importer)

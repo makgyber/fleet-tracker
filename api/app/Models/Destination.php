@@ -16,6 +16,8 @@ class Destination extends Model
         'latitude',
         'longitude',
         'notes',
+        'source_type',
+        'source_id',
     ];
 
     protected $casts = [

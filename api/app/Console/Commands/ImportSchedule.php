@@ -33,11 +33,12 @@ class ImportSchedule extends Command
         }
 
         $this->info(sprintf(
-            'Imported %d team(s) for %s: %d trip(s) optimized, %d skipped (no destinations).',
+            'Imported %d team(s) for %s: %d trip(s) optimized, %d skipped (no destinations), %d excluded (absent/leave/day off/office).',
             $result['teams_imported'],
             $result['date'],
             $result['trips_optimized'],
             $result['skipped_no_destinations'],
+            $result['skipped_excluded'],
         ));
 
         return self::SUCCESS;

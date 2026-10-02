@@ -61,6 +61,30 @@ export function subscribeVehiclePosition(vehicleId, onPosition) {
 }
 
 /**
+ * Subscribe to a team's live position, written by the driver app (and mirrored
+ * by the API) at teams/{uuid}/position. This is the primary live-tracking path:
+ * teams are tracked by their scanned UUID, independent of whether a fleet
+ * vehicle has been assigned yet.
+ *
+ * Firebase-only; returns a no-op unsubscribe when Firebase is disabled (there
+ * is no REST position endpoint keyed by team UUID).
+ *
+ * @param {string} teamUuid
+ * @param {(pos: {lat:number, lng:number, heading?:number, speed?:number, ts?:number}) => void} onPosition
+ * @returns {() => void} unsubscribe
+ */
+export function subscribeTeamPosition(teamUuid, onPosition) {
+  if (!db || !teamUuid) return () => {}
+  const r = ref(db, `teams/${teamUuid}/position`)
+  return onValue(r, (snap) => {
+    const val = snap.val()
+    if (val && typeof val.lat === 'number' && typeof val.lng === 'number') {
+      onPosition(val)
+    }
+  })
+}
+
+/**
  * Subscribe to a trip's live route/ETA payload published by the server.
  * Firebase-only; returns a no-op unsubscribe when Firebase is disabled.
  */

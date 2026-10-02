@@ -36,6 +36,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // tbss team import + listing.
     Route::get('teams', [TeamController::class, 'index']);
+    Route::get('teams/overview', [TeamController::class, 'overview']);
     Route::post('teams/import', [TeamController::class, 'import']);
     Route::post('teams/{team}/assign-vehicle', [TeamController::class, 'assignVehicle']);
 });
