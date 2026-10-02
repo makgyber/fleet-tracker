@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native'
-import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps'
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps'
 import { useTracking } from './useTracking'
 import { FIREBASE_ENABLED } from './config'
 
@@ -54,7 +54,7 @@ export default function DriverScreen({ teamData, onExit }) {
 
   return (
     <View style={styles.container}>
-      <MapView style={styles.map} provider={PROVIDER_DEFAULT} initialRegion={initialRegion}>
+      <MapView style={styles.map} provider={PROVIDER_GOOGLE} initialRegion={initialRegion}>
         {routeCoords.length > 1 && (
           <Polyline coordinates={routeCoords} strokeColor="#4f8cff" strokeWidth={4} />
         )}

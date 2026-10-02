@@ -1,0 +1,12 @@
+# Expo / native build artifacts — EAS regenerates these from app.json.
+# Committing android/ or ios/ would override app.json config (incl. the Maps key).
+/android
+/ios
+node_modules/
+.expo/
+dist/
+*.log
+
+# Local env
+.env
+.env.local

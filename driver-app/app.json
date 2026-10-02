@@ -2,12 +2,17 @@
   "expo": {
     "name": "Fleet Driver",
     "slug": "fleet-driver-app",
+    "scheme": "fleetdriver",
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.topbest.fleetdriver",
+      "config": {
+        "googleMapsApiKey": "PASTE_IOS_GOOGLE_MAPS_API_KEY_HERE"
+      },
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Fleet Driver uses your location to share your position with dispatch while on a trip.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Fleet Driver shares your location with dispatch while on a trip, including in the background.",
@@ -17,12 +22,22 @@
       }
     },
     "android": {
+      "package": "com.topbest.fleetdriver",
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
         "FOREGROUND_SERVICE",
-        "FOREGROUND_SERVICE_LOCATION"
-      ]
+        "FOREGROUND_SERVICE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyAxIgO-vsLur_0Ly7_vp8s2RPxvlLpR3k4"
+        }
+      }
     },
     "plugins": [
       [
@@ -49,7 +64,11 @@
         "databaseURL": "https://topbest-aee58-default-rtdb.asia-southeast1.firebasedatabase.app",
         "projectId": "topbest-aee58",
         "appId": "1:1085221155173:web:c151883d3c9f773ea2f18c"
+      },
+      "eas": {
+        "projectId": "5e55262e-b072-4e70-bd5d-a2049feeba67"
       }
-    }
+    },
+    "owner": "jammerkiai"
   }
 }
