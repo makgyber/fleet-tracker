@@ -57,7 +57,7 @@
       "expo-status-bar"
     ],
     "extra": {
-      "apiUrl": "http://192.168.5.136:8000/api",
+      "apiUrl": "https://fleet.topbestsystems.com/api",
       "firebase": {
         "apiKey": "AIzaSyAeluycXDZwDlVhi3A2xEsB4krqkNJztqI",
         "authDomain": "topbest-aee58.firebaseapp.com",
