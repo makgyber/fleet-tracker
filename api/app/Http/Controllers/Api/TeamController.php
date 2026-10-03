@@ -82,6 +82,7 @@ class TeamController extends Controller
                         'status' => $s->status,
                         'destination' => $s->destination ? [
                             'name' => $s->destination->name,
+                            'client_name' => $s->destination->client_name,
                             'latitude' => (float) $s->destination->latitude,
                             'longitude' => (float) $s->destination->longitude,
                         ] : null,
@@ -90,7 +91,18 @@ class TeamController extends Controller
             })
             ->values();
 
-        return response()->json(['data' => $teams]);
+        // The shared office origin ("stop #0") rendered for every team.
+        $office = config('services.fleet.office');
+
+        return response()->json([
+            'data' => $teams,
+            'office' => [
+                'name' => $office['name'] ?? 'Office',
+                'address' => $office['address'] ?? null,
+                'latitude' => (float) ($office['latitude'] ?? 0),
+                'longitude' => (float) ($office['longitude'] ?? 0),
+            ],
+        ]);
     }
 
     /**
@@ -154,6 +166,7 @@ class TeamController extends Controller
                     'status' => $s->status,
                     'destination' => [
                         'name' => $s->destination->name,
+                        'client_name' => $s->destination->client_name,
                         'latitude' => $s->destination->latitude,
                         'longitude' => $s->destination->longitude,
                     ],

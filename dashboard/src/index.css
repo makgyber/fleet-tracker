@@ -99,6 +99,25 @@ button:disabled { opacity: 0.6; cursor: default; }
   box-shadow: 0 0 0 2px rgba(55,200,113,0.4);
 }
 
+/* Wrapper for a moving marker: the colored dot plus an always-visible caption
+   with the team/vehicle name underneath it. */
+.marker-wrap {
+  display: flex; flex-direction: column; align-items: center; cursor: pointer;
+}
+.marker-caption {
+  margin-top: 3px; padding: 1px 6px; border-radius: 6px;
+  font-size: 11px; font-weight: 600; line-height: 1.3; white-space: nowrap;
+  color: #fff; background: rgba(16,22,36,0.78);
+  border: 1px solid rgba(255,255,255,0.18);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+}
+
+/* Office origin ("stop #0") marker: a distinct dark, square-ish badge. */
+.stop-marker.origin {
+  background: #0f1420; color: #fff;
+  border-radius: 6px; border-color: #4f8cff;
+}
+
 /* Numbered destination markers for the selected trip's stops. */
 .stop-marker {
   width: 22px; height: 22px; border-radius: 50%;
@@ -111,4 +130,12 @@ button:disabled { opacity: 0.6; cursor: default; }
 
 .stop-popup { font-size: 12px; color: #0f1420; }
 .stop-popup b { display: block; margin-bottom: 2px; }
+.stop-popup .client { font-weight: 600; color: #2b57b5; }
 .mapboxgl-popup-content { padding: 8px 10px; border-radius: 8px; }
+
+/* Overview refresh-cadence dropdown in the toolbar. */
+.refresh-select {
+  background: var(--panel, #141a28); color: inherit;
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 4px 8px; font-size: 13px; cursor: pointer;
+}

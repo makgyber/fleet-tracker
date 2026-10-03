@@ -40,7 +40,7 @@ function escapeHtml(str) {
  *   stops?:Array}>} [props.teamRoutes]  when set, renders ALL teams' routes +
  *   stops at once (fleet overview). Overrides the single route/stops rendering.
  */
-export default function MapView({ positions, routeGeometry, focusVehicleId, stops = [], teamRoutes = null }) {
+export default function MapView({ positions, markerLabels = {}, routeGeometry, focusVehicleId, stops = [], teamRoutes = null, office = null }) {
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const markersRef = useRef({})
@@ -92,21 +92,47 @@ export default function MapView({ positions, routeGeometry, focusVehicleId, stop
 
     for (const [id, pos] of Object.entries(positions)) {
       if (!pos) continue
+      const label = markerLabels[id] || (String(id).startsWith('team:') ? 'Team' : 'Vehicle')
       let marker = markersRef.current[id]
       if (!marker) {
+        const isTeam = String(id).startsWith('team:')
+        // A wrapper holds the colored dot plus an always-visible name caption so
+        // operators can read which crew/vehicle each moving icon is.
         const el = document.createElement('div')
-        // Team markers (namespaced "team:<id>") get a distinct style from
-        // vehicle markers so operators can tell crews from fleet vehicles.
-        el.className = String(id).startsWith('team:') ? 'marker team' : 'marker'
+        el.className = isTeam ? 'marker-wrap team' : 'marker-wrap'
+
+        const dot = document.createElement('div')
+        dot.className = isTeam ? 'marker team' : 'marker'
+        el.appendChild(dot)
+
+        const caption = document.createElement('div')
+        caption.className = 'marker-caption'
+        caption.textContent = label
+        el.appendChild(caption)
+        el.title = label
+
+        // A click popup echoes the name for small/overlapping markers.
+        const popup = new mapboxgl.Popup({ offset: 14, closeButton: false }).setHTML(
+          `<div class="stop-popup"><b>${escapeHtml(label)}</b></div>`,
+        )
+
         marker = new mapboxgl.Marker({ element: el })
           .setLngLat([pos.lng, pos.lat])
+          .setPopup(popup)
           .addTo(map)
+        marker._captionEl = caption
         markersRef.current[id] = marker
       } else {
         marker.setLngLat([pos.lng, pos.lat])
+        // Keep the caption/popup in sync if the label resolved later.
+        if (marker._captionEl && marker._captionEl.textContent !== label) {
+          marker._captionEl.textContent = label
+          marker.getElement().title = label
+          marker.getPopup()?.setHTML(`<div class="stop-popup"><b>${escapeHtml(label)}</b></div>`)
+        }
       }
     }
-  }, [positions])
+  }, [positions, markerLabels])
 
   // Render one numbered marker per stop for the selected trip. Rebuilt whenever
   // the stop list changes (markers are cheap and the list is small).
@@ -133,6 +159,7 @@ export default function MapView({ positions, routeGeometry, focusVehicleId, stop
       const etaText = formatEta(stop.eta)
       const popup = new mapboxgl.Popup({ offset: 18, closeButton: false }).setHTML(
         `<div class="stop-popup"><b>${escapeHtml(name)}</b>` +
+          (dest.client_name ? `<div class="client">${escapeHtml(dest.client_name)}</div>` : '') +
           (stop.sequence != null ? `<div>Stop #${stop.sequence}</div>` : '') +
           (etaText ? `<div>ETA ${escapeHtml(etaText)}</div>` : '') +
           `</div>`,
@@ -204,6 +231,7 @@ export default function MapView({ positions, routeGeometry, focusVehicleId, stop
         const popup = new mapboxgl.Popup({ offset: 18, closeButton: false }).setHTML(
           `<div class="stop-popup"><b>${escapeHtml(team.code || 'Team')}</b>` +
             `<div>${escapeHtml(dest.name ?? 'Destination')}</div>` +
+            (dest.client_name ? `<div class="client">${escapeHtml(dest.client_name)}</div>` : '') +
             (stop.sequence != null ? `<div>Stop #${stop.sequence}</div>` : '') +
             (stop.eta ? `<div>ETA ${escapeHtml(formatEta(stop.eta))}</div>` : '') +
             `</div>`,
@@ -219,8 +247,30 @@ export default function MapView({ positions, routeGeometry, focusVehicleId, stop
       }
     })
 
+    // Shared office origin, rendered once as "stop #0" for all teams.
+    if (office && office.latitude != null && office.longitude != null) {
+      const el = document.createElement('div')
+      el.className = 'stop-marker origin'
+      el.textContent = '0'
+
+      const popup = new mapboxgl.Popup({ offset: 18, closeButton: false }).setHTML(
+        `<div class="stop-popup"><b>${escapeHtml(office.name || 'Office')}</b>` +
+          `<div>Origin (Stop #0)</div>` +
+          (office.address ? `<div>${escapeHtml(office.address)}</div>` : '') +
+          `</div>`,
+      )
+
+      const marker = new mapboxgl.Marker({ element: el })
+        .setLngLat([office.longitude, office.latitude])
+        .setPopup(popup)
+        .addTo(map)
+      overviewMarkersRef.current.push(marker)
+      bounds.extend([office.longitude, office.latitude])
+      hasBounds = true
+    }
+
     if (hasBounds) map.fitBounds(bounds, { padding: 60, maxZoom: 14 })
-  }, [teamRoutes])
+  }, [teamRoutes, office])
 
   // Pan to a focused vehicle when its position updates.
   useEffect(() => {

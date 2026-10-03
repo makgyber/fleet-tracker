@@ -28,8 +28,10 @@ export default function App() {
   const [error, setError] = useState('')
   const [view, setView] = useState('vehicles') // 'vehicles' | 'teams'
   const [focusTripId, setFocusTripId] = useState(null)
-  const [overview, setOverview] = useState(false) // show all teams/routes at once
+  const [overview, setOverview] = useState(true) // show all teams/routes at once (default view)
   const [overviewData, setOverviewData] = useState([])
+  const [office, setOffice] = useState(null) // shared origin ("stop #0") from the API
+  const [refreshMs, setRefreshMs] = useState(10000) // overview auto-refresh cadence
 
   const unsubsRef = useRef([])
 
@@ -158,9 +160,10 @@ export default function App() {
     }
   }, [focusTripId])
 
-  // Fleet overview: fetch all teams' routes + stops in one call when enabled.
+  // Fleet overview: fetch all teams' routes + stops in one call when enabled,
+  // then keep refreshing on the selected cadence so the map stays current.
   useEffect(() => {
-    if (!overview) {
+    if (!overview || !authed) {
       setOverviewData([])
       return
     }
@@ -169,18 +172,23 @@ export default function App() {
     setFocusTripId(null)
     setSelectedTrip(null)
     let cancelled = false
-    ;(async () => {
+    const load = async () => {
       try {
         const res = await api.teamsOverview()
-        if (!cancelled) setOverviewData(res.data || [])
+        if (cancelled) return
+        setOverviewData(res.data || [])
+        if (res.office) setOffice(res.office)
       } catch (e) {
         if (!cancelled) setError(e.message)
       }
-    })()
+    }
+    load()
+    const id = setInterval(load, refreshMs)
     return () => {
       cancelled = true
+      clearInterval(id)
     }
-  }, [overview])
+  }, [overview, authed, refreshMs])
 
   // Prefer the live route payload; fall back to the trip's stored geometry.
   const routeGeometry = useMemo(() => {
@@ -204,6 +212,15 @@ export default function App() {
     }
     return merged
   }, [positions, teamPositions])
+
+  // Labels for the moving markers, keyed by the same ids as mapPositions, so
+  // each live icon can show a caption/popup with the team (or vehicle) name.
+  const markerLabels = useMemo(() => {
+    const labels = {}
+    for (const t of teams) labels[`team:${t.id}`] = t.code || `Team ${t.id}`
+    for (const v of vehicles) labels[v.id] = v.label || v.registration || `Vehicle ${v.id}`
+    return labels
+  }, [teams, vehicles])
 
   if (!authed) return <Login onAuthed={() => setAuthed(true)} />
 
@@ -245,6 +262,20 @@ export default function App() {
             >
               {overview ? 'Overview: on' : 'Overview'}
             </button>
+            {overview && (
+              <select
+                className="refresh-select"
+                value={refreshMs}
+                onChange={(e) => setRefreshMs(Number(e.target.value))}
+                title="How often the overview refreshes"
+              >
+                <option value={3000}>Refresh: 3s</option>
+                <option value={5000}>Refresh: 5s</option>
+                <option value={10000}>Refresh: 10s</option>
+                <option value={30000}>Refresh: 30s</option>
+                <option value={60000}>Refresh: 60s</option>
+              </select>
+            )}
           </div>
           <button
             className="secondary"
@@ -322,10 +353,12 @@ export default function App() {
       <div className="map-wrap">
         <MapView
           positions={mapPositions}
+          markerLabels={markerLabels}
           routeGeometry={routeGeometry}
           focusVehicleId={selectedVehicleId}
           stops={selectedTrip?.stops || []}
           teamRoutes={overview ? overviewData : null}
+          office={overview ? office : null}
         />
       </div>
     </div>

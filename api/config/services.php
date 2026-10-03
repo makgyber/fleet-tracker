@@ -55,6 +55,16 @@ return [
     'fleet' => [
         // Radius (meters) within which a GPS fix auto-marks a stop as arrived.
         'arrival_radius_m' => (float) env('FLEET_ARRIVAL_RADIUS_M', 75),
+
+        // The home office / depot. Serves as the shared origin ("stop #0") for
+        // every team on the fleet overview. Coordinates default to the office
+        // at 33 Maj. Santos Dizon St, Marikina; override via env if needed.
+        'office' => [
+            'name' => env('FLEET_OFFICE_NAME', 'Office'),
+            'address' => env('FLEET_OFFICE_ADDRESS', '33 Maj. Santos Dizon St, Marikina, 1800 Metro Manila'),
+            'latitude' => (float) env('FLEET_OFFICE_LAT', 14.625787873632307),
+            'longitude' => (float) env('FLEET_OFFICE_LNG', 121.07649186066402),
+        ],
     ],
 
 ];

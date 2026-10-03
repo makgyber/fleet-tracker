@@ -191,6 +191,7 @@ class ScheduleImporter
 
         $attributes = [
             'name' => $d['name'] ?? ($d['code'] ?? 'Stop'),
+            'client_name' => $this->resolveClientName($d),
             'address' => $d['name'] ?? null,
             'latitude' => $lat,
             'longitude' => $lng,
@@ -211,6 +212,23 @@ class ScheduleImporter
             ['latitude' => $lat, 'longitude' => $lng],
             $attributes,
         );
+    }
+
+    /**
+     * Extract the client/customer name for a tbss stop. The feed is not fully
+     * standardized, so accept the common key variants and return the first
+     * non-empty one, trimmed. Returns null when none is present.
+     */
+    private function resolveClientName(array $d): ?string
+    {
+        foreach (['client_name', 'client', 'customer_name', 'customer', 'account_name', 'account'] as $key) {
+            $value = $d[$key] ?? null;
+            if (is_string($value) && trim($value) !== '') {
+                return trim($value);
+            }
+        }
+
+        return null;
     }
 
     /**
