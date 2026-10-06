@@ -26,7 +26,7 @@ export default function App() {
   const [selectedTrip, setSelectedTrip] = useState(null)
   const [liveRoute, setLiveRoute] = useState(null)
   const [error, setError] = useState('')
-  const [view, setView] = useState('vehicles') // 'vehicles' | 'teams'
+  const [view, setView] = useState('teams') // 'vehicles' | 'teams'
   const [focusTripId, setFocusTripId] = useState(null)
   const [overview, setOverview] = useState(true) // show all teams/routes at once (default view)
   const [overviewData, setOverviewData] = useState([])
