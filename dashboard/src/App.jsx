@@ -32,6 +32,10 @@ export default function App() {
   const [overviewData, setOverviewData] = useState([])
   const [office, setOffice] = useState(null) // shared origin ("stop #0") from the API
   const [refreshMs, setRefreshMs] = useState(10000) // overview auto-refresh cadence
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const d = new Date()
+    return d.toISOString().slice(0, 10)
+  }) // shared date for teams panel and overview
 
   const unsubsRef = useRef([])
 
@@ -174,7 +178,7 @@ export default function App() {
     let cancelled = false
     const load = async () => {
       try {
-        const res = await api.teamsOverview()
+        const res = await api.teamsOverview(selectedDate)
         if (cancelled) return
         setOverviewData(res.data || [])
         if (res.office) setOffice(res.office)
@@ -188,7 +192,7 @@ export default function App() {
       cancelled = true
       clearInterval(id)
     }
-  }, [overview, authed, refreshMs])
+  }, [overview, authed, refreshMs, selectedDate])
 
   // Prefer the live route payload; fall back to the trip's stored geometry.
   const routeGeometry = useMemo(() => {
@@ -290,7 +294,13 @@ export default function App() {
 
         {error && <div className="error" style={{ padding: '0 16px' }}>{error}</div>}
 
-        {view === 'teams' && <TeamsPanel onSelectTrip={(id) => setFocusTripId(id)} />}
+        {view === 'teams' && (
+          <TeamsPanel
+            selectedDate={selectedDate}
+            onDateChange={setSelectedDate}
+            onSelectTrip={(id) => setFocusTripId(id)}
+          />
+        )}
 
         {view === 'vehicles' && (
         <div className="list">
