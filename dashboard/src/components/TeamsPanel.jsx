@@ -1,16 +1,11 @@
 import { useEffect, useState, useCallback } from 'react'
 import { api } from '../api'
 
-function today() {
-  return new Date().toISOString().slice(0, 10)
-}
-
 /**
  * Lists tbss-imported teams for a given schedule date and lets the operator
  * trigger an import. Selecting a team with a trip focuses it on the map.
  */
-export default function TeamsPanel({ onSelectTrip }) {
-  const [date, setDate] = useState(today())
+export default function TeamsPanel({ selectedDate, onDateChange, onSelectTrip }) {
   const [teams, setTeams] = useState([])
   const [loading, setLoading] = useState(false)
   const [importing, setImporting] = useState(false)
@@ -29,18 +24,18 @@ export default function TeamsPanel({ onSelectTrip }) {
   }, [])
 
   useEffect(() => {
-    load(date)
-  }, [date, load])
+    load(selectedDate)
+  }, [selectedDate, load])
 
   const runImport = async () => {
     setImporting(true)
     setMessage('')
     try {
-      const res = await api.importSchedule(date)
+      const res = await api.importSchedule(selectedDate)
       setMessage(
         `Imported ${res.teams_imported} team(s): ${res.trips_optimized} optimized, ${res.skipped_no_destinations} without stops.`,
       )
-      await load(date)
+      await load(selectedDate)
     } catch (e) {
       setMessage(`Import failed: ${e.message}`)
     } finally {
@@ -54,8 +49,8 @@ export default function TeamsPanel({ onSelectTrip }) {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <input
             type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
+            value={selectedDate}
+            onChange={(e) => onDateChange(e.target.value)}
             style={{
               background: 'var(--bg)',
               color: 'var(--text)',
@@ -76,7 +71,7 @@ export default function TeamsPanel({ onSelectTrip }) {
         {loading && <div style={{ padding: 16, color: 'var(--muted)' }}>Loading…</div>}
         {!loading && teams.length === 0 && (
           <div style={{ padding: 16, color: 'var(--muted)' }}>
-            No teams for {date}. Click “Import from tbss”.
+            No teams for {selectedDate}. Click "Import from tbss".
           </div>
         )}
         {teams.map((t) => (
